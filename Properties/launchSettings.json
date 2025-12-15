@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "background_function_service": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7232",
+      "launchBrowser": false
+    }
+  }
+}
