@@ -1,6 +1,3 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
 name: Build and deploy dotnet core project to Azure Function App - background-function-service
 
 on:
@@ -10,32 +7,44 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
-  DOTNET_VERSION: '8.0' # set this to the dotnet version to use
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project
+  DOTNET_VERSION: '8.0.x' # Use patch version for stability
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
+      id-token: write
+      contents: read
 
     steps:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4
 
       - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
-        uses: actions/setup-dotnet@v1
+        uses: actions/setup-dotnet@v4  # Updated to latest
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: 'Resolve Project Dependencies Using Dotnet'
+      - name: 'Build and Publish Project'
         shell: bash
         run: |
-          pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
-          dotnet build --configuration Release --output ./output
-          popd
-      
+          dotnet publish "${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}" \
+            --configuration Release \
+            --output ./output \
+            --no-restore \
+            --no-build  # Skip build since we restored already
+
+      - name: 'Verify Package Structure'  # Debug step
+        shell: bash
+        run: |
+          echo "Contents of ./output:"
+          ls -la ./output/
+          echo "host.json exists?"
+          ls -la ./output/host.json || echo "❌ host.json MISSING"
+          echo ".azurefunctions exists?"
+          ls -la ./output/.azurefunctions/ || echo "❌ .azurefunctions MISSING"
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -49,5 +58,4 @@ jobs:
         with:
           app-name: 'background-function-service'
           slot-name: 'Production'
-          package: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
-          
+          package: './output'  # Fixed: Direct path to output folder
