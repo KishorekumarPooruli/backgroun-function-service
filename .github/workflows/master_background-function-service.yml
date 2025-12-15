@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project
-  DOTNET_VERSION: '8.0.x' # Use patch version for stability
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # Path to project root
+  DOTNET_VERSION: '8.0.x'
 
 jobs:
   build-and-deploy:
@@ -22,28 +22,48 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
-        uses: actions/setup-dotnet@v4  # Updated to latest
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: 'Build and Publish Project'
+      - name: 'List Repository Structure'  # Debug: Show what we have
         shell: bash
         run: |
-          dotnet publish "${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}" \
+          echo "Repository contents:"
+          find . -name "*.csproj" -o -name "*.sln" | head -10
+          echo "Current directory:"
+          ls -la .
+
+      - name: 'Restore Project Dependencies'
+        shell: bash
+        run: |
+          # Find and restore the Functions project
+          PROJECT=$(find . -maxdepth 3 -name "*.csproj" | head -1)
+          echo "Restoring $PROJECT"
+          dotnet restore "$PROJECT"
+
+      - name: 'Build and Publish Function App'
+        shell: bash
+        run: |
+          # Find and publish the Functions project
+          PROJECT=$(find . -maxdepth 3 -name "*.csproj" | head -1)
+          echo "Publishing $PROJECT to ./output"
+          dotnet publish "$PROJECT" \
             --configuration Release \
             --output ./output \
-            --no-restore \
-            --no-build  # Skip build since we restored already
+            --no-restore
 
-      - name: 'Verify Package Structure'  # Debug step
+      - name: 'Verify Package Structure'
         shell: bash
         run: |
-          echo "Contents of ./output:"
+          echo "=== Package contents ==="
           ls -la ./output/
-          echo "host.json exists?"
-          ls -la ./output/host.json || echo "❌ host.json MISSING"
-          echo ".azurefunctions exists?"
-          ls -la ./output/.azurefunctions/ || echo "❌ .azurefunctions MISSING"
+          echo "host.json check:"
+          test -f ./output/host.json && echo "✅ host.json found" || echo "❌ host.json MISSING"
+          echo ".azurefunctions check:"
+          test -d ./output/.azurefunctions && echo "✅ .azurefunctions found" || echo "❌ .azurefunctions MISSING"
+          echo "Contents of .azurefunctions:"
+          ls -la ./output/.azurefunctions/ 2>/dev/null || echo "No .azurefunctions dir"
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -58,4 +78,4 @@ jobs:
         with:
           app-name: 'background-function-service'
           slot-name: 'Production'
-          package: './output'  # Fixed: Direct path to output folder
+          package: './output'
