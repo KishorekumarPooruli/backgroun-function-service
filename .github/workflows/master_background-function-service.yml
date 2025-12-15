@@ -1,3 +1,6 @@
+# Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
 name: Build and deploy dotnet core project to Azure Function App - background-function-service
 
 on:
@@ -7,64 +10,32 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # Path to project root
-  DOTNET_VERSION: '8.0.x'
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
+  DOTNET_VERSION: '8.0' # set this to the dotnet version to use
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
-      contents: read
+      id-token: write #This is required for requesting the JWT
+      contents: read #This is required for actions/checkout
 
     steps:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4
 
       - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v1
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: 'List Repository Structure'  # Debug: Show what we have
+      - name: 'Resolve Project Dependencies Using Dotnet'
         shell: bash
         run: |
-          echo "Repository contents:"
-          find . -name "*.csproj" -o -name "*.sln" | head -10
-          echo "Current directory:"
-          ls -la .
-
-      - name: 'Restore Project Dependencies'
-        shell: bash
-        run: |
-          # Find and restore the Functions project
-          PROJECT=$(find . -maxdepth 3 -name "*.csproj" | head -1)
-          echo "Restoring $PROJECT"
-          dotnet restore "$PROJECT"
-
-      - name: 'Build and Publish Function App'
-        shell: bash
-        run: |
-          # Find and publish the Functions project
-          PROJECT=$(find . -maxdepth 3 -name "*.csproj" | head -1)
-          echo "Publishing $PROJECT to ./output"
-          dotnet publish "$PROJECT" \
-            --configuration Release \
-            --output ./output \
-            --no-restore
-
-      - name: 'Verify Package Structure'
-        shell: bash
-        run: |
-          echo "=== Package contents ==="
-          ls -la ./output/
-          echo "host.json check:"
-          test -f ./output/host.json && echo "✅ host.json found" || echo "❌ host.json MISSING"
-          echo ".azurefunctions check:"
-          test -d ./output/.azurefunctions && echo "✅ .azurefunctions found" || echo "❌ .azurefunctions MISSING"
-          echo "Contents of .azurefunctions:"
-          ls -la ./output/.azurefunctions/ 2>/dev/null || echo "No .azurefunctions dir"
-
+          pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
+          dotnet build --configuration Release --output ./output
+          popd
+      
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -78,4 +49,4 @@ jobs:
         with:
           app-name: 'background-function-service'
           slot-name: 'Production'
-          package: './output'
+          package: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
